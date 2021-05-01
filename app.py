@@ -76,7 +76,8 @@ app.layout = html.Div(
                             clearable=True,
                             className="dropdown",
                         ),
-                    ]
+                    ],
+                    style={"width": "10%"},
                 ),
                 html.Div(
                     children=[
@@ -90,6 +91,7 @@ app.layout = html.Div(
                             className="dropdown",
                         ),
                     ],
+                    style={"width": "50%"},
                 ),
                 html.Div(
                     children=[
