@@ -5,10 +5,14 @@ import dash_table
 import pandas as pd
 import numpy as np
 from dash.dependencies import Output, Input
+from azure.cosmos import CosmosClient
 
-data = pd.read_csv("cleaned_Milk_Daily_Data.csv")
-data["Date"] = pd.to_datetime(data["datesql"], format="%Y-%m-%d")
-data.sort_values("Date", inplace=True)
+url = 'https://cs5412finalprocosmos.documents.azure.com:443/'
+key = 'lKQOG519VP60ez0hT5aah945IV0eyRIuYN3cu2caZulDUJHYhOdQOCnbWd7s8lXOTlufv7yaJBjPI3GnnTqASQ=='
+dbClient = CosmosClient(url, credential=key)
+db = dbClient.get_database_client(database='OutputDB')
+container = db.get_container_client('container')
+
 PAGE_SIZE = 5
 
 external_stylesheets = [
@@ -17,9 +21,34 @@ external_stylesheets = [
         "rel": "stylesheet",
     },
 ]
+
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
 app.title = "Milk Analysis"
+
+animalIDs = container.query_items(
+    query="SELECT DISTINCT c.Animal_ID FROM container c ORDER BY c.Animal_ID",
+    enable_cross_partition_query=True
+)
+
+groupIDs = container.query_items(
+    query="""
+      SELECT DISTINCT c.Group_ID FROM container c ORDER BY c.Group_ID
+    """,
+    enable_cross_partition_query=True
+)
+
+minDate = list(container.query_items(
+    query="SELECT VALUE MIN(c.datesql) FROM container c",
+    enable_cross_partition_query=True
+))[0]
+
+maxDate = list(container.query_items(
+    query="SELECT VALUE MAX(c.datesql) FROM container c",
+    enable_cross_partition_query=True
+))[0]
+
+print(minDate, maxDate)
 
 app.layout = html.Div(
     children=[
@@ -40,15 +69,11 @@ app.layout = html.Div(
             children=[
                 html.Div(
                     children=[
-                        html.Div(children="Animal_ID", className="menu-title"),
+                        html.Div(children="Animal ID", className="menu-title"),
                         dcc.Dropdown(
                             id="animal-filter",
-                            options=[
-                                {"label": animal, "value": animal}
-                                for animal in np.sort(data.Animal_ID.unique())
-                            ],
-                            value=1,
-                            clearable=False,
+                            options=[{"label": row['Animal_ID'], "value": row['Animal_ID']}for row in animalIDs],
+                            clearable=True,
                             className="dropdown",
                         ),
                     ]
@@ -58,13 +83,10 @@ app.layout = html.Div(
                         html.Div(children="Group", className="menu-title"),
                         dcc.Dropdown(
                             id="group-filter",
-                            options=[
-                                {"label": group, "value": group}
-                                for group in np.sort(data.Group_ID.unique())
-                            ],
-                            value=5,
+                            options=[{"label": row['Group_ID'], "value": row['Group_ID']} for row in groupIDs],
                             clearable=True,
-                            searchable=False,
+                            searchable=True,
+                            multi=True,
                             className="dropdown",
                         ),
                     ],
@@ -76,10 +98,10 @@ app.layout = html.Div(
                         ),
                         dcc.DatePickerRange(
                             id="date-range",
-                            min_date_allowed=data.Date.min().date(),
-                            max_date_allowed=data.Date.max().date(),
-                            start_date=data.Date.min().date(),
-                            end_date=data.Date.max().date(),
+                            min_date_allowed=minDate,
+                            max_date_allowed=maxDate,
+                            start_date=minDate,
+                            end_date=maxDate,
                         ),
                     ]
                 ),
@@ -105,8 +127,7 @@ app.layout = html.Div(
                 html.Div(
                     children=dash_table.DataTable(
                         id='activity-table',
-                        columns=[{"name": i, "id": i} for i in data[['Animal_ID', 'Group_ID', 'ActivityDeviation(%)']].columns
-                        ],
+                        columns=[{"name": i, "id": i} for i in ['Animal_ID', 'Group_ID', 'ActivityDeviation(%)']],
                         page_current=0,
                         page_action='custom',
                         page_size=PAGE_SIZE,
@@ -124,26 +145,35 @@ app.layout = html.Div(
     [   
         Input("animal-filter", "value"),
         Input("group-filter", "value"),
-        Input('activity-table', "page_current"),
-        Input('activity-table', "page_size"),
         Input("date-range", "start_date"),
         Input("date-range", "end_date"),
+        Input('activity-table', "page_current"),
+        Input('activity-table', "page_size"),
     ],
 )
-def update_charts(animal_id, group_id, page_current, page_size, start_date, end_date):
-    
-    mask = (
-        (data.Animal_ID == animal_id)
-        & (not group_id or (data.Group_ID == group_id))
-        & (data.Date >= start_date)
-        & (data.Date <= end_date)
-    )
-    filtered_data = data.loc[mask, :]
+def update_charts(animal_id, group_id, start_date, end_date, page_current, page_size):
+    data = list(container.query_items(
+        query = f"""
+          SELECT c.datesql, c.Animal_ID, c.Group_ID, c['ActivityDeviation(%)'], c['Fat(%)'] FROM container c
+          WHERE {'false' if animal_id is None else 'c.Animal_ID = @aID'} AND 
+                {'true' if not group_id else 'ARRAY_CONTAINS(@gIDs, c.Group_ID)'} AND
+                (c.datesql BETWEEN @sDate AND @eDate)
+          ORDER BY c.datesql
+        """,
+        parameters=[
+            dict(name='@aID', value=animal_id),
+            dict(name='@gIDs', value=group_id),
+            dict(name='@sDate', value=start_date),
+            dict(name='@eDate', value=end_date)
+        ],
+        enable_cross_partition_query=True
+    ))
+
     activity_chart_figure = {
         "data": [
             {
-                "x": filtered_data["Date"],
-                "y": filtered_data["ActivityDeviation(%)"],
+                "x": [row['datesql'] for row in data],
+                "y": [row["ActivityDeviation(%)"] for row in data],
                 "type": "lines",
                 "hovertemplate": "%{y:.2f}%<extra></extra>",
             },
@@ -163,8 +193,8 @@ def update_charts(animal_id, group_id, page_current, page_size, start_date, end_
     fat_chart_figure = {
         "data": [
             {
-                "x": filtered_data["Date"],
-                "y": filtered_data["Fat(%)"],
+                "x": [row["datesql"] for row in data],
+                "y": [row["Fat(%)"] for row in data],
                 "type": "lines",
             },
         ],
@@ -175,9 +205,10 @@ def update_charts(animal_id, group_id, page_current, page_size, start_date, end_
             "colorway": ["#E12D39"],
         },
     }
-    table_data = filtered_data[['Animal_ID', 'Group_ID', 'ActivityDeviation(%)']].iloc[
-        page_current*page_size:(page_current+ 1)*page_size
-    ].to_dict('records')
+
+    table_data = data
+    print(data)
+
     return activity_chart_figure, fat_chart_figure, table_data
 
 
