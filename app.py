@@ -11,8 +11,10 @@ url = 'https://cs5412finalprocosmos.documents.azure.com:443/'
 key = 'lKQOG519VP60ez0hT5aah945IV0eyRIuYN3cu2caZulDUJHYhOdQOCnbWd7s8lXOTlufv7yaJBjPI3GnnTqASQ=='
 dbClient = CosmosClient(url, credential=key)
 db = dbClient.get_database_client(database='OutputDB')
-container = db.get_container_client('container')
-
+container = db.get_container_client('milk')
+attribute_choice = ["Dim", "Lactation_Num", "Yield", "ProdRate", "Fat", "Avg_Fat", "Protein", "Avg_Protein",
+"Lactose", "Avg_Lactose", "Conductivity", "Avg_Conductivity", "Milking_Time", "Avg_Milking_Time", "Activity", "Activity",
+"Activity_Deviation", "Weight", "Temperature", "Stomach_Activity"]
 PAGE_SIZE = 5
 
 external_stylesheets = [
@@ -39,12 +41,12 @@ groupIDs = container.query_items(
 )
 
 minDate = list(container.query_items(
-    query="SELECT VALUE MIN(c.datesql) FROM container c",
+    query="SELECT VALUE MIN(c.Timestamp) FROM container c",
     enable_cross_partition_query=True
 ))[0]
 
 maxDate = list(container.query_items(
-    query="SELECT VALUE MAX(c.datesql) FROM container c",
+    query="SELECT VALUE MAX(c.Timestamp) FROM container c",
     enable_cross_partition_query=True
 ))[0]
 
@@ -156,11 +158,11 @@ app.layout = html.Div(
 def update_charts(animal_id, group_id, start_date, end_date, page_current, page_size):
     data = list(container.query_items(
         query = f"""
-          SELECT c.datesql, c.Animal_ID, c.Group_ID, c['ActivityDeviation(%)'], c['Fat(%)'] FROM container c
+          SELECT c.Timestamp, c.Animal_ID, c.Group_ID, c['Activity_Deviation'], c['Fat'] FROM container c
           WHERE {'false' if animal_id is None else 'c.Animal_ID = @aID'} AND 
                 {'true' if not group_id else 'ARRAY_CONTAINS(@gIDs, c.Group_ID)'} AND
-                (c.datesql BETWEEN @sDate AND @eDate)
-          ORDER BY c.datesql
+                (c.Timestamp BETWEEN @sDate AND @eDate)
+          ORDER BY c.Timestamp
         """,
         parameters=[
             dict(name='@aID', value=animal_id),
@@ -174,8 +176,8 @@ def update_charts(animal_id, group_id, start_date, end_date, page_current, page_
     activity_chart_figure = {
         "data": [
             {
-                "x": [row['datesql'] for row in data],
-                "y": [row["ActivityDeviation(%)"] for row in data],
+                "x": [row['Timestamp'] for row in data],
+                "y": [row["Activity_Deviation"] for row in data],
                 "type": "lines",
                 "hovertemplate": "%{y:.2f}%<extra></extra>",
             },
@@ -195,8 +197,8 @@ def update_charts(animal_id, group_id, start_date, end_date, page_current, page_
     fat_chart_figure = {
         "data": [
             {
-                "x": [row["datesql"] for row in data],
-                "y": [row["Fat(%)"] for row in data],
+                "x": [row["Timestamp"] for row in data],
+                "y": [row["Fat"] for row in data],
                 "type": "lines",
             },
         ],
