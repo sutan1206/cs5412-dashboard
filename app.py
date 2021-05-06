@@ -5,6 +5,8 @@ import dash_table
 import pandas as pd
 import numpy as np
 from dash.dependencies import Output, Input
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from azure.cosmos import CosmosClient
 
 url = 'https://cs5412finalprocosmos.documents.azure.com:443/'
@@ -13,8 +15,8 @@ dbClient = CosmosClient(url, credential=key)
 db = dbClient.get_database_client(database='OutputDB')
 container = db.get_container_client('milk')
 attribute_choice = ["Dim", "Lactation_Num", "Yield", "ProdRate", "Fat", "Avg_Fat", "Protein", "Avg_Protein",
-"Lactose", "Avg_Lactose", "Conductivity", "Avg_Conductivity", "Milking_Time", "Avg_Milking_Time", "Activity", "Activity",
-"Activity_Deviation", "Weight", "Temperature", "Stomach_Activity"]
+"Lactose", "Avg_Lactose", "Conductivity", "Avg_Conductivity", "Milking_Time", "Avg_Milking_Time", "Activity",
+"Activity_Deviation", "Temperature", "Stomach_Activity"]
 PAGE_SIZE = 5
 
 external_stylesheets = [
@@ -93,8 +95,39 @@ app.layout = html.Div(
                             className="dropdown",
                         ),
                     ],
-                    style={"width": "50%"},
+                    style={"width": "30%"},
                 ),
+                html.Div(
+                    children=[
+                        html.Div(children="Attribute 1", className="menu-title"),
+                        dcc.Dropdown(
+                            id="attribute1-filter",
+                            options=[{"label": attribute, "value": attribute} for attribute in attribute_choice],
+                            clearable=True,
+                            searchable=True,
+                            multi=False,
+                            value='Fat',
+                            className="dropdown",
+                        ),
+                    ],
+                    style={"width": "10%"},
+                ),
+                html.Div(
+                    children=[
+                        html.Div(children="Attribute 2", className="menu-title"),
+                        dcc.Dropdown(
+                            id="attribute2-filter",
+                            options=[{"label": attribute, "value": attribute} for attribute in attribute_choice],
+                            clearable=True,
+                            searchable=True,
+                            multi=False,
+                            value='Activity_Deviation',
+                            className="dropdown",
+                        ),
+                    ],
+                    style={"width": "10%"},
+                ),
+
                 html.Div(
                     children=[
                         html.Div(
@@ -109,6 +142,10 @@ app.layout = html.Div(
                         ),
                     ]
                 ),
+                html.Div(className='submit', children=[
+
+                html.Button('Submit', id='submit_button', n_clicks=0)
+                ]),
             ],
             className="menu",
         ),
@@ -116,25 +153,9 @@ app.layout = html.Div(
             children=[
                 html.Div(
                     children=dcc.Graph(
-                        id="activity-chart",
+                        id="attribute-chart",
                         config={"displayModeBar": False},
-                    ),
-                    className="card",
-                ),
-                html.Div(
-                    children=dcc.Graph(
-                        id="fat-chart",
-                        config={"displayModeBar": False},
-                    ),
-                    className="card",
-                ),
-                html.Div(
-                    children=dash_table.DataTable(
-                        id='activity-table',
-                        columns=[{"name": i, "id": i} for i in ['Animal_ID', 'Group_ID', 'ActivityDeviation(%)']],
-                        page_current=0,
-                        page_action='custom',
-                        page_size=PAGE_SIZE,
+                        figure={},
                     ),
                     className="card",
                 ),
@@ -145,77 +166,69 @@ app.layout = html.Div(
 )
 
 @app.callback(
-    [Output("activity-chart", "figure"), Output("fat-chart", "figure"), Output('activity-table', 'data'),],
+    Output("attribute-chart", "figure"),
     [   
         Input("animal-filter", "value"),
         Input("group-filter", "value"),
+        Input("attribute1-filter", "value"),
+        Input("attribute2-filter", "value"),
         Input("date-range", "start_date"),
         Input("date-range", "end_date"),
-        Input('activity-table', "page_current"),
-        Input('activity-table', "page_size"),
     ],
 )
-def update_charts(animal_id, group_id, start_date, end_date, page_current, page_size):
+def update_charts(animal_id, group_id, attribute1, attribute2, start_date, end_date):
+    
+
     data = list(container.query_items(
         query = f"""
-          SELECT c.Timestamp, c.Animal_ID, c.Group_ID, c['Activity_Deviation'], c['Fat'] FROM container c
+          SELECT c.Timestamp, c.Animal_ID, c.Group_ID, %s, %s FROM container c
           WHERE {'false' if animal_id is None else 'c.Animal_ID = @aID'} AND 
                 {'true' if not group_id else 'ARRAY_CONTAINS(@gIDs, c.Group_ID)'} AND
                 (c.Timestamp BETWEEN @sDate AND @eDate)
           ORDER BY c.Timestamp
-        """,
+        """ % ('c.'+ attribute1, 'c.'+attribute2),
         parameters=[
             dict(name='@aID', value=animal_id),
             dict(name='@gIDs', value=group_id),
             dict(name='@sDate', value=start_date),
-            dict(name='@eDate', value=end_date)
+            dict(name='@eDate', value=end_date),
         ],
         enable_cross_partition_query=True
     ))
+    print(data)
+    # Create figure with secondary y-axis
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    activity_chart_figure = {
-        "data": [
-            {
-                "x": [row['Timestamp'] for row in data],
-                "y": [row["Activity_Deviation"] for row in data],
-                "type": "lines",
-                "hovertemplate": "%{y:.2f}%<extra></extra>",
-            },
-        ],
-        "layout": {
-            "title": {
-                "text": "Acrivity Deviation %",
-                "x": 0.05,
-                "xanchor": "left",
-            },
-            "xaxis": {"fixedrange": True},
-            "yaxis": {"ticksuffix": "%", "fixedrange": True},
-            "colorway": ["#17B897"],
-        },
-    }
+    # Add traces
+    fig.add_trace(
+        go.Scatter(x=[row['Timestamp'] for row in data], y=[row[attribute1] for row in data], name=attribute1),
+        secondary_y=False,
+    )
 
-    fat_chart_figure = {
-        "data": [
-            {
-                "x": [row["Timestamp"] for row in data],
-                "y": [row["Fat"] for row in data],
-                "type": "lines",
-            },
-        ],
-        "layout": {
-            "title": {"text": "Fat(%)", "x": 0.05, "xanchor": "left"},
-            "xaxis": {"fixedrange": True},
-            "yaxis": {"ticksuffix": "%", "fixedrange": True},
-            "colorway": ["#E12D39"],
-        },
-    }
+    fig.add_trace(
+        go.Scatter(x=[row['Timestamp'] for row in data], y=[row[attribute2] for row in data], name=attribute2),
+        secondary_y=True,
+    )
 
-    table_data = data
+    # Add figure title
+    fig.update_layout(
+        title_text="Attribute table"
+    )
+
+    # Set x-axis title
+    fig.update_xaxes(title_text="timestamp ")
+
+    # Set y-axes titles
+    fig.update_yaxes(
+        title_text="<b>%s</b>" %attribute1, 
+        secondary_y=False)
+    fig.update_yaxes(
+        title_text="<b>%s</b>" %attribute2,
+        secondary_y=True)
     print(data)
 
-    return activity_chart_figure, fat_chart_figure, table_data
+    return fig
 
 
 if __name__ == "__main__":
     app.run_server(debug=True)
-
