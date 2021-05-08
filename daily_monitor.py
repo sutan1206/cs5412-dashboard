@@ -13,7 +13,7 @@ url = 'https://cs5412finalprocosmos.documents.azure.com:443/'
 key = 'lKQOG519VP60ez0hT5aah945IV0eyRIuYN3cu2caZulDUJHYhOdQOCnbWd7s8lXOTlufv7yaJBjPI3GnnTqASQ=='
 
 db = CosmosClient(url, credential=key).get_database_client(database='OutputDB')
-container = db.get_container_client('milk')
+container = db.get_container_client('test')
 
 attribute_choice = ["Temperature", "Stomach_Activity"]
 PAGE_SIZE = 5
@@ -145,12 +145,14 @@ def update_charts(animal_id, attribute1, attribute2, date):
 
     # Add traces
     if data and attribute1:
+      data[0][attribute1].sort()
       fig.add_trace(
           go.Scatter(x=[p[0] for p in data[0][attribute1]], y=[p[1] for p in data[0][attribute1]], name=attribute1),
           secondary_y=False,
       )
 
     if data and attribute2:
+      data[0][attribute2].sort()
       fig.add_trace(
           go.Scatter(x=[p[0] for p in data[0][attribute2]], y=[p[1] for p in data[0][attribute2]], name=attribute2),
           secondary_y=True,
