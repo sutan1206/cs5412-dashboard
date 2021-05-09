@@ -1,6 +1,7 @@
 from app import app
 
 import dash
+import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objects as go
@@ -95,6 +96,11 @@ monitorSearchBar = [
     html.Div(className='submit', children=[
       html.Button('Submit', id='submit_button', n_clicks=0)
     ]),
+    dcc.Interval(
+            id='interval-component',
+            interval=10*1000, # in milliseconds
+            n_intervals=0
+    )
 ]
 
 monitorGraph = [
@@ -106,18 +112,23 @@ monitorGraph = [
         ),
         className="card",
     ),
+    
 ]
+
+
 
 @app.callback(
     Output("attribute-chart", "figure"),
-    [   
+    [
         Input("animal-filter", "value"),
         Input("attribute1-filter", "value"),
         Input("attribute2-filter", "value"),
         Input("date-picker", "date"),
+        Input('interval-component', 'n_intervals'),
+        
     ],
 )
-def update_charts(animal_id, attribute1, attribute2, date):
+def update_charts(animal_id, attribute1, attribute2, date, n):
     if attribute1 == attribute2:
       attribute2 = None
 
@@ -127,7 +138,7 @@ def update_charts(animal_id, attribute1, attribute2, date):
                  {f', c.{attribute1}' if attribute1 else ''}
                  {f', c.{attribute2}' if attribute2 else ''}
           FROM container c
-          WHERE {'false' if animal_id is None else 'c.Animal_ID = @aID'} AND 
+          WHERE {'false' if animal_id is None else 'c.Animal_ID = @aID'} AND
                 {'false' if date is None else 'c.Timestamp = @date'}
           ORDER BY c.Timestamp
         """,
@@ -137,9 +148,8 @@ def update_charts(animal_id, attribute1, attribute2, date):
         ],
         enable_cross_partition_query=True
     ))
-
     print(data)
-
+    
     # Create figure with secondary y-axis
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -150,6 +160,7 @@ def update_charts(animal_id, attribute1, attribute2, date):
           go.Scatter(x=[p[0] for p in data[0][attribute1]], y=[p[1] for p in data[0][attribute1]], name=attribute1),
           secondary_y=False,
       )
+      
 
     if data and attribute2:
       data[0][attribute2].sort()
@@ -157,6 +168,7 @@ def update_charts(animal_id, attribute1, attribute2, date):
           go.Scatter(x=[p[0] for p in data[0][attribute2]], y=[p[1] for p in data[0][attribute2]], name=attribute2),
           secondary_y=True,
       )
+      
 
     # Add figure title
     fig.update_layout(
@@ -172,5 +184,5 @@ def update_charts(animal_id, attribute1, attribute2, date):
 
     if attribute2:
       fig.update_yaxes(title_text="<b>%s</b>" %attribute2, secondary_y=True)
-
+   
     return fig

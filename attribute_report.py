@@ -1,6 +1,7 @@
 from app import app
 
 import dash
+import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objects as go
@@ -15,7 +16,7 @@ dbClient = CosmosClient(url, credential=key)
 db = dbClient.get_database_client(database='OutputDB')
 container = db.get_container_client('test')
 attribute_choice = ["Dim", "Lactation_Num", "Yield", "ProdRate", "Fat", "Avg_Fat", "Protein", "Avg_Protein",
-                    "Lactose", "Avg_Lactose", "Conductivity", "Avg_Conductivity", "Milking_Time", 
+                    "Lactose", "Avg_Lactose", "Conductivity", "Avg_Conductivity", "Milking_Time",
                     "Avg_Milking_Time", "Activity", "Activity_Deviation"]
 PAGE_SIZE = 5
 
@@ -123,20 +124,31 @@ reportGraph = [
         ),
         className="card",
     ),
+    html.Div(
+        children=dash_table.DataTable(
+            id='attribute-table',
+            page_current=0,
+            page_action='custom',
+            page_size=PAGE_SIZE,
+        ),
+        className="card",
+    ),
 ]
 
 @app.callback(
-    Output("attribute-chart2", "figure"),
-    [   
+    [Output("attribute-chart2", "figure"), Output('attribute-table', 'data'), Output('attribute-table', 'columns')],
+    [
         Input("animal-filter", "value"),
         Input("group-filter", "value"),
         Input("attribute1-filter", "value"),
         Input("attribute2-filter", "value"),
         Input("date-range", "start_date"),
         Input("date-range", "end_date"),
+        Input('attribute-table', "page_current"),
+        Input('attribute-table', "page_size"),
     ],
 )
-def update_charts(animal_id, group_id, attribute1, attribute2, start_date, end_date):
+def update_charts(animal_id, group_id, attribute1, attribute2, start_date, end_date, page_current, page_size):
     if attribute1 == attribute2:
       attribute2 = None
 
@@ -146,7 +158,7 @@ def update_charts(animal_id, group_id, attribute1, attribute2, start_date, end_d
                  {f', c.{attribute1}' if attribute1 else ''}
                  {f', c.{attribute2}' if attribute2 else ''}
           FROM container c
-          WHERE {'false' if animal_id is None else 'c.Animal_ID = @aID'} AND 
+          WHERE {'false' if animal_id is None else 'c.Animal_ID = @aID'} AND
                 {'true' if not group_id else 'ARRAY_CONTAINS(@gIDs, c.Group_ID)'} AND
                 (c.Timestamp BETWEEN @sDate AND @eDate)
           ORDER BY c.Timestamp
@@ -161,22 +173,24 @@ def update_charts(animal_id, group_id, attribute1, attribute2, start_date, end_d
     ))
 
     print(data)
-    
+
     # Create figure with secondary y-axis
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-
+    column_names = ["Timestamp", "Animal_ID", "Group_ID"]
     # Add traces
     if attribute1:
       fig.add_trace(
           go.Scatter(x=[row['Timestamp'] for row in data], y=[row[attribute1] for row in data], name=attribute1),
           secondary_y=False,
       )
+      column_names.append(attribute1)
 
     if attribute2:
       fig.add_trace(
           go.Scatter(x=[row['Timestamp'] for row in data], y=[row[attribute2] for row in data], name=attribute2),
           secondary_y=True,
       )
+      column_names.append(attribute2)
 
     # Add figure title
     fig.update_layout(
@@ -193,4 +207,8 @@ def update_charts(animal_id, group_id, attribute1, attribute2, start_date, end_d
     if attribute2:
       fig.update_yaxes(title_text="<b>%s</b>" % attribute2, secondary_y=True)
 
-    return fig
+    table_data = data[page_current*page_size:(page_current+ 1)*page_size]
+    columns = [{"name": i, "id": i} for i in column_names]
+    
+
+    return fig, table_data, columns
