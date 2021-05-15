@@ -93,9 +93,6 @@ monitorSearchBar = [
             ),
         ]
     ),
-    html.Div(className='submit', children=[
-      html.Button('Submit', id='submit_button', n_clicks=0)
-    ]),
     dcc.Interval(
             id='interval-component',
             interval=10*1000, # in milliseconds

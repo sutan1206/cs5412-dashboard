@@ -110,9 +110,6 @@ reportSearchBar = [
             ),
         ]
     ),
-    html.Div(className='submit', children=[
-      html.Button('Submit', id='submit_button', n_clicks=0)
-    ]),
 ]
 
 reportGraph = [

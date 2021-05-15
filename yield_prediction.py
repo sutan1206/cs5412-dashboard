@@ -66,14 +66,6 @@ predictSearchBar = [
             ),
         ]
     ),
-    html.Div(className='submit', children=[
-      html.Button('Submit', id='submit_button', n_clicks=0)
-    ]),
-    dcc.Interval(
-            id='interval-component',
-            interval=10*1000, # in milliseconds
-            n_intervals=0
-    )
 ]
 
 predictGraph = [
@@ -88,13 +80,6 @@ predictGraph = [
     
 ]
 
-def allowSelfSignedHttps(allowed):
-    # bypass the server certificate verification on client side
-    if allowed and not os.environ.get('PYTHONHTTPSVERIFY', '') and getattr(ssl, '_create_unverified_context', None):
-        ssl._create_default_https_context = ssl._create_unverified_context
-
-allowSelfSignedHttps(True)
-
 def predict(lastFive):
   data = {'data': [{f'last{5 - i}':lastFive[i] for i in range(5)}]}
   body = str.encode(json.dumps(data))
@@ -105,18 +90,16 @@ def predict(lastFive):
   response = urllib.request.urlopen(req)
 
   result = json.loads(json.loads(response.read().decode()))
-  return result['result']
+  return result['result'][0]
 
 @app.callback(
     Output("attribute-chart3", "figure"),
     [
         Input("animal-filter", "value"),
         Input("date-picker", "date"),
-        Input('interval-component', 'n_intervals'),
-        
     ],
 )
-def update_charts(animal_id, date, n):
+def update_charts(animal_id, date):
     data = list(container.query_items(
         query = f"""
           SELECT c.Timestamp, c.Yield
@@ -147,6 +130,9 @@ def update_charts(animal_id, date, n):
       lastDate = datetime.strptime(data[-1]['Timestamp'], '%Y-%m-%d')
       predictions = [data[-1]['Yield']]
       lastFive = deque([row['Yield'] for row in data[max(0, len(data) - 5):]])
+
+      while len(lastFive) < 5:
+        lastFive.appendleft('NaN')
 
       for _ in range(7):
         predictions.append(predict(lastFive))
