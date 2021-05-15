@@ -19,6 +19,7 @@ navbar = dbc.NavbarSimple(
     children=[
         dbc.NavItem(dbc.NavLink("Attribute Report", href="/report")),
         dbc.NavItem(dbc.NavLink("Activity Monitor", href="/monitor")),
+        dbc.NavItem(dbc.NavLink("Yield Prediction", href="/prediction")),
     ],
     brand="Milk Analytics",
     color="dark",
