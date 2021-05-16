@@ -14,7 +14,8 @@ url = 'https://cs5412finalprocosmos.documents.azure.com:443/'
 key = 'lKQOG519VP60ez0hT5aah945IV0eyRIuYN3cu2caZulDUJHYhOdQOCnbWd7s8lXOTlufv7yaJBjPI3GnnTqASQ=='
 
 db = CosmosClient(url, credential=key).get_database_client(database='OutputDB')
-container = db.get_container_client('test')
+# container = db.get_container_client('test')
+container = db.get_container_client('milk')
 
 attribute_choice = ["Temperature", "Stomach_Activity"]
 PAGE_SIZE = 5

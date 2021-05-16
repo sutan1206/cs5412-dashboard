@@ -14,7 +14,8 @@ url = 'https://cs5412finalprocosmos.documents.azure.com:443/'
 key = 'lKQOG519VP60ez0hT5aah945IV0eyRIuYN3cu2caZulDUJHYhOdQOCnbWd7s8lXOTlufv7yaJBjPI3GnnTqASQ=='
 dbClient = CosmosClient(url, credential=key)
 db = dbClient.get_database_client(database='OutputDB')
-container = db.get_container_client('test')
+# container = db.get_container_client('test')
+container = db.get_container_client('milk')
 attribute_choice = ["Dim", "Lactation_Num", "Yield", "ProdRate", "Fat", "Avg_Fat", "Protein", "Avg_Protein",
                     "Lactose", "Avg_Lactose", "Conductivity", "Avg_Conductivity", "Milking_Time",
                     "Avg_Milking_Time", "Activity", "Activity_Deviation"]
@@ -128,7 +129,6 @@ reportGraph = [
             page_action='custom',
             page_size=PAGE_SIZE,
         ),
-        className="card",
     ),
 ]
 

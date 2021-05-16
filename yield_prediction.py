@@ -21,7 +21,8 @@ url = 'https://cs5412finalprocosmos.documents.azure.com:443/'
 key = 'lKQOG519VP60ez0hT5aah945IV0eyRIuYN3cu2caZulDUJHYhOdQOCnbWd7s8lXOTlufv7yaJBjPI3GnnTqASQ=='
 
 db = CosmosClient(url, credential=key).get_database_client(database='OutputDB')
-container = db.get_container_client('test')
+#container = db.get_container_client('test')
+container = db.get_container_client('milk')
 
 attribute_choice = ["Temperature", "Stomach_Activity"]
 
@@ -129,7 +130,7 @@ def update_charts(animal_id, date):
 
       lastDate = datetime.strptime(data[-1]['Timestamp'], '%Y-%m-%d')
       predictions = [data[-1]['Yield']]
-      lastFive = deque([row['Yield'] for row in data[max(0, len(data) - 5):]])
+      lastFive = deque([row['Yield'] if row['Yield'] else 'NaN' for row in data[max(0, len(data) - 5):]])
 
       while len(lastFive) < 5:
         lastFive.appendleft('NaN')
